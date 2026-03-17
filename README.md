@@ -1,3 +1,8 @@
+# devops-capstone-project
+
+This is my IBM DevOps Capstone Project — a Customer Accounts Microservice
+built using Flask, TDD, Docker, Kubernetes, and Tekton CI/CD pipeline.
+
 # DevOps Capstone Template
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
