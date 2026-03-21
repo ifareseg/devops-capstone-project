@@ -58,7 +58,11 @@ class TestAccountService(TestCase):
         accounts = []
         for _ in range(count):
             account = AccountFactory()
-            response = self.client.post(BASE_URL, json=account.serialize())
+            response = self.client.post(
+                BASE_URL,
+                json=account.serialize(),
+                content_type="application/json"
+            )
             self.assertEqual(
                 response.status_code,
                 status.HTTP_201_CREATED,
@@ -194,3 +198,23 @@ class TestAccountService(TestCase):
         """It should not allow an illegal method call"""
         response = self.client.delete(BASE_URL)
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_security_headers(self):
+        """It should return security headers"""
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.headers.get("X-Frame-Options"), "SAMEORIGIN")
+        self.assertEqual(response.headers.get("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(
+            response.headers.get("Referrer-Policy"),
+            "strict-origin-when-cross-origin"
+        )
+
+    def test_cors_headers(self):
+        """It should return CORS headers"""
+        response = self.client.get("/", headers={"Origin": "http://localhost:3000"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.headers.get("Access-Control-Allow-Origin"),
+            "http://localhost:3000"
+        )
