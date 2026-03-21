@@ -1,0 +1,22 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: cd-pipeline-run
+spec:
+  pipelineRef:
+    name: cd-pipeline
+
+  workspaces:
+    - name: pipeline-workspace
+      persistentVolumeClaim:
+        claimName: pipelinerun-pvc
+
+  params:
+    - name: repo-url
+      value: https://github.com/ifareseg/devops-capstone-project.git
+    - name: branch
+      value: main
+    - name: image-reference
+      value: image-registry.openshift-image-registry.svc:5000/sn-labs-eslamalfi2/accounts:latest
+    - name: manifest-dir
+      value: k8s

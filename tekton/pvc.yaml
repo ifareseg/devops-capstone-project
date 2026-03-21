@@ -4,9 +4,9 @@ metadata:
   name: pipelinerun-pvc
 spec:
   storageClassName: skills-network-learner
-  resources:
-    requests:
-      storage:  1Gi
-  volumeMode: Filesystem
   accessModes:
     - ReadWriteMany
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi

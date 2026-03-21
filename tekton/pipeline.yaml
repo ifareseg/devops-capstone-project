@@ -1,38 +1,104 @@
-#
-# This pipeline needs the following tasks from Tekton Catalog
-#   - git-clone
-#   - flake8
-#
----
-apiVersion: tekton.dev/v1beta1
+apiVersion: tekton.dev/v1
 kind: Pipeline
-metadata:  
+metadata:
   name: cd-pipeline
 spec:
   workspaces:
     - name: pipeline-workspace
+
   params:
     - name: repo-url
+      type: string
     - name: branch
+      type: string
       default: main
+    - name: image-reference
+      type: string
+    - name: manifest-dir
+      type: string
+      default: k8s
+
   tasks:
     - name: init
-      workspaces:
-        - name: source
-          workspace: pipeline-workspace          
       taskRef:
         name: cleanup
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
 
     - name: clone
-      workspaces:
-        - name: output
-          workspace: pipeline-workspace          
       taskRef:
         name: git-clone
-      params:
-      - name: url
-        value: $(params.repo-url)
-      - name: revision
-        value: $(params.branch)
+        kind: ClusterTask
       runAfter:
         - init
+      params:
+        - name: url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.branch)
+        - name: deleteExisting
+          value: "true"
+      workspaces:
+        - name: output
+          workspace: pipeline-workspace
+
+    - name: lint
+      taskRef:
+        name: flake8
+      runAfter:
+        - clone
+      params:
+        - name: package
+          value: service
+        - name: args
+          value:
+            - --count
+            - --max-complexity=10
+            - --max-line-length=127
+            - --statistics
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+
+    - name: test
+      taskRef:
+        name: nose-tests
+      runAfter:
+        - lint
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+
+    - name: build-image
+      taskRef:
+        name: buildah
+        kind: ClusterTask
+      runAfter:
+        - test
+      params:
+        - name: IMAGE
+          value: $(params.image-reference)
+        - name: DOCKERFILE
+          value: ./Dockerfile
+        - name: CONTEXT
+          value: .
+        - name: TLSVERIFY
+          value: "false"
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
+
+    - name: deploy
+      taskRef:
+        name: kubernetes-deploy
+      runAfter:
+        - build-image
+      params:
+        - name: manifest-dir
+          value: $(params.manifest-dir)
+        - name: image-reference
+          value: $(params.image-reference)
+      workspaces:
+        - name: source
+          workspace: pipeline-workspace
