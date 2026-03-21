@@ -1,4 +1,3 @@
----
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -12,8 +11,10 @@ spec:
   steps:
     - name: echo-message
       image: alpine:3
-      command: ["/bin/echo"]
-      args: ["$(params.message)"]
+      command:
+        - /bin/echo
+      args:
+        - $(params.message)
 
 ---
 apiVersion: tekton.dev/v1
@@ -57,6 +58,9 @@ spec:
     - name: run-tests
       image: python:3.9-slim
       workingDir: $(workspaces.source.path)
+      env:
+        - name: DATABASE_URI
+          value: sqlite:///test.db
       script: |
         #!/bin/sh
         set -eu
@@ -75,9 +79,6 @@ spec:
     - name: package
       type: string
       default: service
-    - name: args
-      type: array
-      default: []
   workspaces:
     - name: source
   steps:
@@ -139,21 +140,26 @@ spec:
     - name: source
   steps:
     - name: apply-manifests
-      image: bitnami/kubectl:latest
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
       workingDir: $(workspaces.source.path)
       script: |
         #!/bin/sh
         set -eu
 
         echo "Updating deployment image to $(params.image-reference)"
-        sed -i "s|image: .*|image: $(params.image-reference)|" $(params.manifest-dir)/deployment.yaml
+
+        rm -rf /tmp/manifests
+        mkdir -p /tmp/manifests
+        cp -R $(params.manifest-dir)/* /tmp/manifests/
+
+        sed -i "s|image: .*|image: $(params.image-reference)|" /tmp/manifests/deployment.yaml
 
         echo "Applying Kubernetes manifests"
-        kubectl apply -f $(params.manifest-dir)/postgres.yaml
-        kubectl apply -f $(params.manifest-dir)/postgres-service.yaml
-        kubectl apply -f $(params.manifest-dir)/deployment.yaml
-        kubectl apply -f $(params.manifest-dir)/service.yaml
+        kubectl apply -f /tmp/manifests/postgres.yaml
+        kubectl apply -f /tmp/manifests/postgres-service.yaml
+        kubectl apply -f /tmp/manifests/deployment.yaml
+        kubectl apply -f /tmp/manifests/service.yaml
 
-        if [ -f "$(params.manifest-dir)/route.yaml" ]; then
-          kubectl apply -f $(params.manifest-dir)/route.yaml || true
+        if [ -f /tmp/manifests/route.yaml ]; then
+          kubectl apply -f /tmp/manifests/route.yaml || true
         fi
