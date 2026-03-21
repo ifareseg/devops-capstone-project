@@ -2,6 +2,99 @@
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
+  name: echo
+spec:
+  description: This task will echo the message.
+  params:
+    - name: message
+      description: The message to echo
+      type: string
+  steps:
+    - name: echo-message
+      image: alpine:3
+      command: ["/bin/echo"]
+      args: ["$(params.message)"]
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: cleanup
+spec:
+  description: This task will clean up a workspace by deleting all of the files.
+  workspaces:
+    - name: source
+  steps:
+    - name: remove
+      image: alpine:3
+      env:
+        - name: WORKSPACE_SOURCE_PATH
+          value: $(workspaces.source.path)
+      workingDir: $(workspaces.source.path)
+      securityContext:
+        runAsNonRoot: false
+        runAsUser: 0
+      script: |
+        #!/usr/bin/env sh
+        set -eu
+        echo "Removing all files from ${WORKSPACE_SOURCE_PATH} ..."
+        if [ -d "${WORKSPACE_SOURCE_PATH}" ] ; then
+          rm -rf "${WORKSPACE_SOURCE_PATH:?}"/*
+          rm -rf "${WORKSPACE_SOURCE_PATH}"/.[!.]*
+          rm -rf "${WORKSPACE_SOURCE_PATH}"/..?*
+        fi
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: nose-tests
+spec:
+  description: Run unit tests with nosetests
+  workspaces:
+    - name: source
+  steps:
+    - name: run-tests
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        pip install --upgrade pip wheel
+        pip install -r requirements.txt
+        nosetests
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: flake8
+spec:
+  description: Run flake8 lint checks
+  params:
+    - name: package
+      type: string
+      default: service
+    - name: args
+      type: array
+      default: []
+  workspaces:
+    - name: source
+  steps:
+    - name: lint
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        pip install --upgrade pip wheel
+        pip install -r requirements.txt
+        flake8 $(params.package) --count --max-complexity=10 --max-line-length=127 --statistics
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
   name: git-clone
 spec:
   description: Clone a git repository into the workspace
@@ -33,25 +126,34 @@ spec:
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: flake8
+  name: kubernetes-deploy
 spec:
-  description: Run flake8 lint checks
+  description: Deploy manifests to Kubernetes/OpenShift
   params:
-    - name: package
+    - name: manifest-dir
       type: string
-      default: service
-    - name: args
-      type: array
-      default: []
+      default: k8s
+    - name: image-reference
+      type: string
   workspaces:
     - name: source
   steps:
-    - name: lint
-      image: python:3.9-slim
+    - name: apply-manifests
+      image: bitnami/kubectl:latest
       workingDir: $(workspaces.source.path)
       script: |
         #!/bin/sh
         set -eu
-        pip install --upgrade pip wheel
-        pip install -r requirements.txt
-        flake8 $(params.package) --count --max-complexity=10 --max-line-length=127 --statistics
+
+        echo "Updating deployment image to $(params.image-reference)"
+        sed -i "s|image: .*|image: $(params.image-reference)|" $(params.manifest-dir)/deployment.yaml
+
+        echo "Applying Kubernetes manifests"
+        kubectl apply -f $(params.manifest-dir)/postgres.yaml
+        kubectl apply -f $(params.manifest-dir)/postgres-service.yaml
+        kubectl apply -f $(params.manifest-dir)/deployment.yaml
+        kubectl apply -f $(params.manifest-dir)/service.yaml
+
+        if [ -f "$(params.manifest-dir)/route.yaml" ]; then
+          kubectl apply -f $(params.manifest-dir)/route.yaml || true
+        fi
