@@ -1,0 +1,40 @@
+Name:                   accounts
+Namespace:              sn-labs-eslamalfi2
+CreationTimestamp:      Sat, 21 Mar 2026 15:41:48 -0400
+Labels:                 app=accounts
+Annotations:            deployment.kubernetes.io/revision: 1
+Selector:               app=accounts
+Replicas:               1 desired | 1 updated | 1 total | 0 available | 1 unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+Pod Template:
+  Labels:  app=accounts
+  Containers:
+   accounts:
+    Image:      image-registry.openshift-image-registry.svc:5000/sn-labs-eslamalfi2/accounts:latest
+    Port:       8080/TCP
+    Host Port:  0/TCP
+    Liveness:   http-get http://:8080/health delay=15s timeout=1s period=20s #success=1 #failure=3
+    Readiness:  http-get http://:8080/health delay=5s timeout=1s period=10s #success=1 #failure=3
+    Environment:
+      PORT:          8080
+      DATABASE_URI:  postgresql://postgres:postgres@postgres:5432/postgres
+    Mounts:          <none>
+  Volumes:           <none>
+Conditions:
+  Type           Status  Reason
+  ----           ------  ------
+  Available      False   MinimumReplicasUnavailable
+  Progressing    False   ProgressDeadlineExceeded
+OldReplicaSets:  <none>
+NewReplicaSet:   accounts-8457b75cd7 (1/1 replicas created)
+Events:          <none>
+NAME                            READY   STATUS             RESTARTS       AGE
+pod/accounts-8457b75cd7-72j7h   0/1     CrashLoopBackOff   91 (15s ago)   7h29m
+
+NAME                                  DESIRED   CURRENT   READY   AGE
+replicaset.apps/accounts-8457b75cd7   1         1         0       9h
+
+NAME               TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)   AGE
+service/accounts   ClusterIP   172.21.220.7   <none>        80/TCP    9h
